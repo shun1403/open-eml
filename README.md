@@ -64,3 +64,7 @@ npm run dev
 ## 기여하기
 
 버그 제보와 기능 제안은 [Issues](https://github.com/shun1403/open-eml/issues)에 남겨 주세요. 메일이 제대로 열리지 않는 경우, 개인정보를 지운 샘플 `.eml` 파일을 함께 첨부해 주시면 큰 도움이 됩니다.
+
+## 라이선스
+
+[MIT](LICENSE)
