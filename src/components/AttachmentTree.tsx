@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatBytes, isRiskyFile } from '../core/files';
 import { previewKind } from '../core/preview';
 import { childrenOf } from '../core/tree';
@@ -9,6 +9,7 @@ export interface AttachmentActions {
   onPreview: (node: AttachmentNode) => void;
   onOpenMail: (node: AttachmentNode) => void;
   onDownload: (node: AttachmentNode) => void;
+  onUnlock: (node: AttachmentNode) => void;
 }
 
 interface AttachmentTreeProps extends AttachmentActions {
@@ -18,6 +19,7 @@ interface AttachmentTreeProps extends AttachmentActions {
 function iconFor(node: AttachmentNode): IconName {
   if (node.children?.kind === 'mail') return 'mail';
   if (node.children?.kind === 'archive') return 'archive';
+  if (node.locked) return 'lock';
   const kind = previewKind(node);
   if (kind === 'image') return 'image';
   if (kind === 'pdf') return 'pdf';
@@ -45,6 +47,13 @@ function AttachmentRow({ node, depth, ...actions }: AttachmentActions & { node: 
   const isMail = node.children?.kind === 'mail';
   const canPreview = previewKind(node) !== null;
   const risky = isRiskyFile(node.filename);
+
+  // 암호를 풀어 내용이 생기면 바로 펼쳐 보여준다
+  const wasLocked = useRef(Boolean(node.locked));
+  useEffect(() => {
+    if (wasLocked.current && !node.locked && children.length > 0) setExpanded(true);
+    wasLocked.current = Boolean(node.locked);
+  }, [node.locked, children.length]);
 
   return (
     <li role="treeitem" aria-expanded={children.length > 0 ? expanded : undefined}>
@@ -77,6 +86,11 @@ function AttachmentRow({ node, depth, ...actions }: AttachmentActions & { node: 
             <span className="badge badge-warning" title="실행 파일이나 매크로가 들어 있을 수 있습니다">
               <Icon name="warning" size={12} /> 주의
             </span>
+          )}
+          {node.locked && (
+            <button type="button" className="badge badge-lock" onClick={() => actions.onUnlock(node)}>
+              <Icon name="lock" size={12} /> 암호 입력
+            </button>
           )}
           {node.error && <span className="tree-error">{node.error}</span>}
         </span>

@@ -1,15 +1,11 @@
-import PostalMime, { type Address, type Attachment } from 'postal-mime';
-import { unzipSync } from 'fflate';
-import { recoverLatin1Name } from './encoding';
-import {
-  extensionFromMime,
-  isMailFile,
-  isZipFile,
-  mimeFromFilename,
-  resolveMimeType,
-  safeFilename,
-} from './files';
-import type { AttachmentNode, MailAddress, ParsedMail } from './types';
+import PostalMime, { type Address } from 'postal-mime';
+import { containerKind, extensionFromMime, resolveMimeType, safeFilename } from './files';
+import { parseMsg, type MsgContent } from './msg';
+import { parseTnef } from './tnef';
+import type { AttachmentNode, MailAddress, ParsedMail, RawAttachment } from './types';
+import { LimitError, readZip, type ZipBudget } from './zip';
+
+export type MailFormat = 'eml' | 'msg';
 
 export interface ParseLimits {
   /** 첨부 속 메일·압축 파일을 몇 단계까지 펼칠지 */
@@ -26,41 +22,58 @@ export const DEFAULT_LIMITS: ParseLimits = {
   maxExtractedEntries: 5000,
 };
 
-interface Budget {
+interface Budget extends ZipBudget {
   limits: ParseLimits;
-  bytesLeft: number;
-  entriesLeft: number;
 }
 
-export async function parseEml(
+function newBudget(limits: ParseLimits): Budget {
+  return { limits, bytesLeft: limits.maxExtractedBytes, entriesLeft: limits.maxExtractedEntries };
+}
+
+export function parseEml(raw: Uint8Array | ArrayBuffer, limits: ParseLimits = DEFAULT_LIMITS): Promise<ParsedMail> {
+  return parseMailFile(raw, 'eml', limits);
+}
+
+export function parseMailFile(
   raw: Uint8Array | ArrayBuffer,
+  format: MailFormat,
   limits: ParseLimits = DEFAULT_LIMITS,
 ): Promise<ParsedMail> {
-  const budget: Budget = {
-    limits,
-    bytesLeft: limits.maxExtractedBytes,
-    entriesLeft: limits.maxExtractedEntries,
-  };
-  return parseMail(toBytes(raw), '', 0, budget);
+  return parseMail(toBytes(raw), format, '', 0, newBudget(limits));
 }
 
-async function parseMail(raw: Uint8Array, idPrefix: string, depth: number, budget: Budget): Promise<ParsedMail> {
+/** 암호가 걸린 ZIP 첨부를 암호로 열어 그 안의 항목을 돌려준다 */
+export async function unlockArchive(
+  archive: Pick<AttachmentNode, 'id' | 'content'>,
+  password: string,
+  limits: ParseLimits = DEFAULT_LIMITS,
+): Promise<AttachmentNode[]> {
+  const budget = newBudget(limits);
+  const listing = await readZip(archive.content, budget, password);
+  const raws = listing.files.map((file): RawAttachment => ({ filename: file.name, content: file.content, inline: false }));
+  return buildNodes(raws, `${archive.id}/`, 1, budget);
+}
+
+async function parseMail(raw: Uint8Array, format: MailFormat, idPrefix: string, depth: number, budget: Budget) {
+  const content = format === 'msg' ? await parseMsg(raw) : await parseEmlContent(raw);
+  const { rawAttachments, ...mail } = content;
+  const attachments = await buildNodes(rawAttachments, idPrefix, depth, budget);
+
+  // Outlook이 보낸 메일은 서식 있는 본문이 winmail.dat 안에만 들어 있기도 하다
+  for (const node of attachments) {
+    if (node.children?.kind !== 'archive' || !node.children.body) continue;
+    mail.html ??= node.children.body.html;
+    mail.text ??= node.children.body.text;
+  }
+  return { ...mail, attachments } satisfies ParsedMail;
+}
+
+async function parseEmlContent(raw: Uint8Array): Promise<MsgContent> {
   // 중첩 메일은 postal-mime이 본문에 합쳐 버리지 않도록 첨부로 받아서 직접 펼친다
   const email = await PostalMime.parse(raw, {
     forceRfc822Attachments: true,
     attachmentEncoding: 'arraybuffer',
   });
-
-  const attachments: AttachmentNode[] = [];
-  for (const [index, attachment] of email.attachments.entries()) {
-    const node = toNode(attachment, `${idPrefix}${index}`, index);
-    await expand(node, depth, budget);
-    if (!attachment.filename?.trim() && node.children?.kind === 'mail' && node.children.mail.subject) {
-      node.filename = `${safeFilename(node.children.mail.subject, 'message')}.eml`;
-    }
-    attachments.push(node);
-  }
-
   return {
     subject: email.subject ?? '',
     from: flattenAddresses(email.from ? [email.from] : []),
@@ -73,87 +86,76 @@ async function parseMail(raw: Uint8Array, idPrefix: string, depth: number, budge
     html: email.html,
     text: email.text,
     headers: email.headers.map((header) => ({ key: header.originalKey, value: header.value })),
-    attachments,
+    rawAttachments: email.attachments.map((attachment) => ({
+      filename: attachment.filename ?? undefined,
+      mimeType: attachment.mimeType,
+      inline: Boolean(attachment.related),
+      contentId: attachment.contentId,
+      content: toBytes(attachment.content),
+    })),
   };
 }
 
-function toNode(attachment: Attachment, id: string, index: number): AttachmentNode {
-  const content = toBytes(attachment.content);
-  const declaredType = attachment.mimeType || 'application/octet-stream';
-  const filename = attachment.filename?.trim() || fallbackFilename(declaredType, index);
+async function buildNodes(raws: RawAttachment[], idPrefix: string, depth: number, budget: Budget) {
+  const nodes: AttachmentNode[] = [];
+  for (const [index, raw] of raws.entries()) {
+    const node = toNode(raw, `${idPrefix}${index}`, index);
+    await expand(node, depth, budget);
+    if (!raw.filename?.trim() && node.children?.kind === 'mail' && node.children.mail.subject) {
+      node.filename = `${safeFilename(node.children.mail.subject, 'message')}.${node.filename.split('.').pop()}`;
+    }
+    nodes.push(node);
+  }
+  return nodes;
+}
+
+function toNode(raw: RawAttachment, id: string, index: number): AttachmentNode {
+  const filename = raw.filename?.trim() || fallbackFilename(raw.mimeType, index);
   return {
     id,
     filename,
-    mimeType: resolveMimeType(filename, declaredType),
-    size: content.byteLength,
-    inline: Boolean(attachment.related),
-    contentId: attachment.contentId?.replace(/^<|>$/g, ''),
-    content,
+    mimeType: resolveMimeType(filename, raw.mimeType),
+    size: raw.content.byteLength,
+    inline: raw.inline,
+    contentId: raw.contentId?.replace(/^<|>$/g, ''),
+    content: raw.content,
   };
 }
 
-function fallbackFilename(mimeType: string, index: number): string {
-  const ext = extensionFromMime(mimeType) ?? 'bin';
-  return `${ext === 'eml' ? 'message' : 'attachment'}-${index + 1}.${ext}`;
+function fallbackFilename(mimeType: string | undefined, index: number): string {
+  const type = mimeType?.toLowerCase() ?? '';
+  if (type === 'application/ms-tnef' || type === 'application/vnd.ms-tnef') return 'winmail.dat';
+  const ext = extensionFromMime(type) ?? 'bin';
+  return `${ext === 'eml' || ext === 'msg' ? 'message' : 'attachment'}-${index + 1}.${ext}`;
 }
 
 async function expand(node: AttachmentNode, depth: number, budget: Budget): Promise<void> {
-  const isMail = isMailFile(node.filename, node.mimeType);
-  const isZip = !isMail && isZipFile(node.filename, node.mimeType);
-  if (!isMail && !isZip) return;
+  const kind = containerKind(node);
+  if (!kind) return;
   if (depth + 1 > budget.limits.maxDepth) {
     node.error = '너무 깊이 중첩되어 있어 펼치지 않았습니다.';
     return;
   }
 
   try {
-    if (isMail) {
-      const mail = await parseMail(node.content, `${node.id}/`, depth + 1, budget);
-      node.children = { kind: 'mail', mail };
+    if (kind === 'eml' || kind === 'msg') {
+      node.children = { kind: 'mail', mail: await parseMail(node.content, kind, `${node.id}/`, depth + 1, budget) };
+    } else if (kind === 'tnef') {
+      const tnef = parseTnef(node.content);
+      const entries = await buildNodes(tnef.attachments, `${node.id}/`, depth + 1, budget);
+      node.children = { kind: 'archive', entries, body: tnef.body };
     } else {
-      node.children = { kind: 'archive', entries: await unzipEntries(node, depth + 1, budget) };
+      const listing = await readZip(node.content, budget);
+      if (listing.encrypted) {
+        node.locked = true;
+        return;
+      }
+      const raws = listing.files.map((file): RawAttachment => ({ filename: file.name, content: file.content, inline: false }));
+      node.children = { kind: 'archive', entries: await buildNodes(raws, `${node.id}/`, depth + 1, budget) };
     }
   } catch (error) {
     node.error = error instanceof LimitError ? error.message : '파일이 손상되었거나 지원하지 않는 형식입니다.';
   }
-}
-
-class LimitError extends Error {}
-
-async function unzipEntries(archive: AttachmentNode, depth: number, budget: Budget): Promise<AttachmentNode[]> {
-  let declaredBytes = 0;
-  let declaredEntries = 0;
-  const files = unzipSync(archive.content, {
-    filter(file) {
-      if (file.name.endsWith('/')) return false;
-      declaredBytes += file.originalSize;
-      declaredEntries += 1;
-      if (declaredBytes > budget.bytesLeft || declaredEntries > budget.entriesLeft) {
-        throw new LimitError('압축을 풀면 너무 커서 내용을 펼치지 않았습니다.');
-      }
-      return true;
-    },
-  });
-
-  const entries: AttachmentNode[] = [];
-  for (const [index, [rawName, content]] of Object.entries(files).entries()) {
-    budget.bytesLeft -= content.byteLength;
-    budget.entriesLeft -= 1;
-    if (budget.bytesLeft < 0) throw new LimitError('압축을 풀면 너무 커서 내용을 펼치지 않았습니다.');
-
-    const filename = recoverLatin1Name(rawName);
-    const node: AttachmentNode = {
-      id: `${archive.id}/${index}`,
-      filename,
-      mimeType: mimeFromFilename(filename) ?? 'application/octet-stream',
-      size: content.byteLength,
-      inline: false,
-      content,
-    };
-    await expand(node, depth, budget);
-    entries.push(node);
-  }
-  return entries;
 }
 
 function flattenAddresses(addresses: Address[] | undefined): MailAddress[] {

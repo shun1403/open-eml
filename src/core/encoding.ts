@@ -47,3 +47,37 @@ export function recoverLatin1Name(name: string): string {
   }
   return hasHighByte ? decodeText(bytes) : name;
 }
+
+const CODEPAGE_LABELS: Record<number, string> = {
+  874: 'windows-874',
+  932: 'shift_jis',
+  936: 'gbk',
+  949: 'euc-kr',
+  950: 'big5',
+  1200: 'utf-16le',
+  1201: 'utf-16be',
+  1361: 'euc-kr',
+  20127: 'utf-8',
+  20932: 'euc-jp',
+  28591: 'iso-8859-1',
+  50220: 'iso-2022-jp',
+  51932: 'euc-jp',
+  51949: 'euc-kr',
+  54936: 'gb18030',
+  65001: 'utf-8',
+};
+
+/** Windows 코드페이지 번호를 TextDecoder 이름으로 바꾼다 */
+export function codepageLabel(codepage: number | undefined): string | undefined {
+  if (!codepage) return undefined;
+  if (codepage >= 1250 && codepage <= 1258) return `windows-${codepage}`;
+  if (codepage >= 28592 && codepage <= 28606) return `iso-8859-${codepage - 28590}`;
+  return CODEPAGE_LABELS[codepage];
+}
+
+/** 'cp949', 'windows-949', '949' 같은 이름을 TextDecoder가 아는 이름으로 바꾼다 */
+export function normalizeCharset(name: string): string {
+  const match = /^(?:cp|windows-?|ms)?(\d+)$/i.exec(name.trim());
+  if (match) return codepageLabel(Number(match[1])) ?? name;
+  return name;
+}

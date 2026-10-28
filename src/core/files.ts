@@ -21,6 +21,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   ics: 'text/calendar',
   vcf: 'text/vcard',
   eml: 'message/rfc822',
+  msg: 'application/vnd.ms-outlook',
+  mbox: 'application/mbox',
   zip: 'application/zip',
   mp3: 'audio/mpeg',
   wav: 'audio/wav',
@@ -88,6 +90,32 @@ export function isRiskyFile(filename: string): boolean {
 
 export function isMailFile(filename: string, mimeType: string): boolean {
   return mimeType === 'message/rfc822' || extensionOf(filename) === 'eml';
+}
+
+export function isMsgFile(filename: string, mimeType: string): boolean {
+  return mimeType === 'application/vnd.ms-outlook' || extensionOf(filename) === 'msg';
+}
+
+const TNEF_TYPES = new Set(['application/ms-tnef', 'application/vnd.ms-tnef']);
+
+function hasTnefSignature(content: Uint8Array): boolean {
+  return content[0] === 0x78 && content[1] === 0x9f && content[2] === 0x3e && content[3] === 0x22;
+}
+
+export function isTnefFile(filename: string, mimeType: string, content?: Uint8Array): boolean {
+  if (TNEF_TYPES.has(mimeType) || /^win(?:mail)?\.dat$/i.test(baseName(filename))) return true;
+  return extensionOf(filename) === 'dat' && content !== undefined && hasTnefSignature(content);
+}
+
+export type ContainerKind = 'eml' | 'msg' | 'tnef' | 'zip';
+
+/** 안에 다른 파일이나 메일이 들어 있어 펼칠 수 있는 형식인지 */
+export function containerKind(node: { filename: string; mimeType: string; content: Uint8Array }): ContainerKind | null {
+  if (isMailFile(node.filename, node.mimeType)) return 'eml';
+  if (isMsgFile(node.filename, node.mimeType)) return 'msg';
+  if (isTnefFile(node.filename, node.mimeType, node.content)) return 'tnef';
+  if (isZipFile(node.filename, node.mimeType)) return 'zip';
+  return null;
 }
 
 export function isZipFile(filename: string, mimeType: string): boolean {

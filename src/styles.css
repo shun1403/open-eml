@@ -205,8 +205,6 @@ h1, h2, p { margin: 0; }
 .preview-body { flex: 1; min-height: 0; overflow: auto; }
 .preview-image, .preview-audio, .preview-video, .preview-none { display: grid; place-items: center; padding: 16px; background: var(--surface-2); }
 .preview-image img, .preview-video video { max-width: 100%; max-height: 100%; object-fit: contain; }
-.preview-pdf { display: flex; }
-.preview-pdf object { flex: 1; display: grid; place-items: center; width: 100%; height: 100%; border: 0; }
 .preview-text pre { margin: 0; padding: 16px 18px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .preview-text p { padding: 0 18px 16px; font-size: 13px; }
 
@@ -214,6 +212,55 @@ h1, h2, p { margin: 0; }
   position: fixed; left: 50%; bottom: 24px; z-index: 60; transform: translateX(-50%);
   padding: 10px 18px; border-radius: 10px; background: var(--text); color: var(--bg); font-size: 14px; box-shadow: var(--shadow);
 }
+
+/* 새 형식들 */
+.small { font-size: 12px; }
+.formats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.formats span { padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 12px; }
+.badge-lock { border: 0; cursor: pointer; background: var(--accent-soft); color: var(--accent); }
+.badge-lock:hover { filter: brightness(0.97); }
+.badge-service { background: var(--surface-2); color: var(--muted); font-weight: 500; }
+.cloud-links .section-bar .small { margin-left: -4px; }
+.link-row .tree-actions .icon-button { color: var(--muted); }
+.scan-progress { margin: 0; padding: 8px 14px; font-size: 13px; color: var(--accent); background: var(--accent-soft); border-bottom: 1px solid var(--border); }
+.list-count { margin: 0; padding: 6px 14px; font-size: 12px; border-bottom: 1px solid var(--border); }
+.mail-list li.more { display: grid; padding: 12px; border-bottom: 0; }
+
+.password-dialog {
+  width: min(400px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+}
+.password-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.password-dialog form { display: grid; gap: 10px; }
+.password-dialog h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; }
+.password-dialog p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.password-dialog input {
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit;
+}
+.password-dialog input[aria-invalid='true'] { border-color: var(--danger); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.button:disabled { opacity: 0.55; cursor: default; }
+
+.preview-message { padding: 24px; text-align: center; }
+.preview-note { margin: 0; padding: 10px 18px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.preview-pdf { background: var(--surface-2); }
+.pdf-pages { display: grid; justify-items: center; gap: 12px; padding: 16px; }
+.pdf-page { display: block; max-width: 100%; background: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); }
+.pdf-page:not([width]) { width: 100%; aspect-ratio: 1 / 1.414; }
+.docx-preview .html-frame { min-height: 400px; }
+.sheet-preview { display: flex; flex-direction: column; min-height: 100%; }
+.sheet-tabs { overflow-x: auto; flex-shrink: 0; }
+.sheet-scroll { flex: 1; overflow: auto; }
+.sheet-table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.sheet-table th, .sheet-table td {
+  padding: 4px 8px; border: 1px solid var(--border); white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+}
+.sheet-table thead th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-weight: 500; z-index: 1; }
+.sheet-table tbody th { position: sticky; left: 0; background: var(--surface-2); color: var(--muted); font-weight: 500; text-align: right; }
+.hwp-preview { display: grid; }
+.hwp-thumbnail { max-width: min(360px, 90%); margin: 16px auto 0; border: 1px solid var(--border); background: #fff; }
+.hwp-text { padding: 16px 22px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hwp-text p { margin: 0 0 4px; }
 
 /* 좁은 화면 */
 @media (max-width: 760px) {

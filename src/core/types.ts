@@ -26,7 +26,8 @@ export interface ParsedMail {
 
 export type AttachmentChildren =
   | { kind: 'mail'; mail: ParsedMail }
-  | { kind: 'archive'; entries: AttachmentNode[] };
+  /** ZIP, winmail.dat처럼 파일을 담고 있는 형식. winmail.dat은 메일 본문도 담고 있을 수 있다 */
+  | { kind: 'archive'; entries: AttachmentNode[]; body?: { html?: string; text?: string } };
 
 export interface AttachmentNode {
   /** 메일 안에서 고유한 경로형 ID (예: "2", "2/0", "2/0/3") */
@@ -40,6 +41,17 @@ export interface AttachmentNode {
   contentId?: string;
   content: Uint8Array;
   children?: AttachmentChildren;
+  /** 암호가 걸려 있어 아직 펼치지 못한 압축 파일 */
+  locked?: boolean;
   /** 첨부 안을 펼치지 못한 이유 (손상된 압축, 한도 초과 등) */
   error?: string;
+}
+
+/** 각 메일 형식의 파서가 돌려주는, 아직 펼치지 않은 첨부 */
+export interface RawAttachment {
+  filename?: string;
+  mimeType?: string;
+  inline: boolean;
+  contentId?: string;
+  content: Uint8Array;
 }

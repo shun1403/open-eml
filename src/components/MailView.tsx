@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { downloadZip } from '../core/download';
 import { formatAddress, formatDate } from '../core/format';
 import { prepareHtml } from '../core/html';
+import { findCloudLinks, type CloudLink } from '../core/links';
 import type { MailAddress, ParsedMail } from '../core/types';
 import { AttachmentTree, type AttachmentActions } from './AttachmentTree';
 import { HtmlFrame } from './HtmlFrame';
@@ -31,6 +32,44 @@ function AddressLine({ label, addresses }: { label: string; addresses: MailAddre
   );
 }
 
+function CloudLinks({ links }: { links: CloudLink[] }) {
+  return (
+    <section className="attachments cloud-links" aria-label="링크로 받는 첨부">
+      <div className="section-bar">
+        <h2>
+          링크로 받는 첨부 <span className="count">{links.length}</span>
+        </h2>
+        <span className="muted small">보낸 사람이 올려 둔 외부 사이트에서 내려받습니다</span>
+      </div>
+      <ul className="tree">
+        {links.map((link) => (
+          <li key={link.url}>
+            <div className="tree-row link-row">
+              <span />
+              <span className="tree-icon">
+                <Icon name="cloud" />
+              </span>
+              <span className="tree-name" title={link.url}>
+                <a className="link-button" href={link.url} target="_blank" rel="noopener noreferrer">
+                  {link.label}
+                </a>
+                <span className="badge badge-service">{link.service}</span>
+                {link.expires && <span className="tree-error">{link.expires}까지</span>}
+              </span>
+              <span className="tree-size">{link.size ?? ''}</span>
+              <span className="tree-actions">
+                <a className="icon-button" href={link.url} target="_blank" rel="noopener noreferrer" title="새 창에서 열기">
+                  <Icon name="external" />
+                </a>
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function MailView({ mail, fallbackTitle, ...actions }: MailViewProps) {
   const [tab, setTab] = useState<BodyTab>(mail.html ? 'html' : mail.text ? 'text' : 'headers');
   const [allowRemote, setAllowRemote] = useState(false);
@@ -42,6 +81,7 @@ export function MailView({ mail, fallbackTitle, ...actions }: MailViewProps) {
     [mail.html, cidUrls, allowRemote],
   );
 
+  const links = useMemo(() => findCloudLinks(mail.html, mail.text), [mail.html, mail.text]);
   const files = mail.attachments.filter((node) => !node.inline);
   const inlineCount = mail.attachments.length - files.length;
   const listed = showInline ? mail.attachments : files;
@@ -94,6 +134,8 @@ export function MailView({ mail, fallbackTitle, ...actions }: MailViewProps) {
           )}
         </section>
       )}
+
+      {links.length > 0 && <CloudLinks links={links} />}
 
       <section className="body" aria-label="본문">
         <div className="tabs" role="tablist">

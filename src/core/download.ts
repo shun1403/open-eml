@@ -52,7 +52,7 @@ function addNodes(target: Zippable, nodes: AttachmentNode[]): void {
       if (inner.length > 0) {
         const folder: Zippable = {};
         addNodes(folder, inner);
-        target[uniqueName(`${name.replace(/\.eml$/i, '')}_첨부`, used)] = folder;
+        target[uniqueName(`${name.replace(/\.(?:eml|msg)$/i, '')}_첨부`, used)] = folder;
       }
     }
   }

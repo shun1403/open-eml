@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 
-export const EML_ACCEPT = '.eml,message/rfc822';
+export const OPEN_ACCEPT = '.eml,.msg,.mbox,.mbx,message/rfc822,application/vnd.ms-outlook,application/mbox';
 
 function hasFiles(event: DragEvent): boolean {
   return Boolean(event.dataTransfer?.types.includes('Files'));
@@ -67,8 +67,11 @@ export function EmptyState({ onPick }: { onPick: () => void }) {
     <section className="empty-state">
       <div className="drop-target">
         <Icon name="mail" size={48} />
-        <h1>.eml 파일을 끌어다 놓으세요</h1>
+        <h1>메일 파일을 끌어다 놓으세요</h1>
         <p>본문과 첨부파일, 첨부 속 메일과 압축 파일까지 바로 열어 보고 내려받을 수 있습니다.</p>
+        <p className="formats">
+          <span>.eml</span> <span>.msg (Outlook)</span> <span>.mbox (Gmail·Thunderbird 백업)</span>
+        </p>
         <button type="button" className="button button-primary" onClick={onPick}>
           <Icon name="upload" /> 파일 선택
         </button>
