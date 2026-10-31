@@ -16,8 +16,8 @@ export interface PrepareHtmlOptions {
 /** http(s):, ftp:, //host, \\host (브라우저는 역슬래시도 슬래시로 읽는다) */
 const REMOTE_URL = /^\s*(?:(?:https?|ftp):|[\\/]{2})/i;
 const REMOTE_ANYWHERE = /(?:https?|ftp):|[\\/]{2}/i;
-// 길이를 제한해 "url(url(url(..." 같은 입력에서 정규식이 오래 걸리지 않게 한다
-const CSS_URL = /url\(\s*(['"]?)([^)'"]{0,4096})\1\s*\)/gi;
+// 주소 안에 괄호를 허용하지 않아, "url(url(url(..." 같은 입력도 한 번 훑고 끝나게 한다
+const CSS_URL = /url\(\s*(['"]?)([^()'"]{0,4096})\1\s*\)/gi;
 const CSS_REMOTE_STRING = /(['"])\s*(?:(?:https?|ftp):|[\\/]{2})[^'"]{0,4096}\1/gi;
 const CSS_IMPORT = /@import\s+[^;]{0,4096};?/gi;
 /** 리소스를 불러오는 속성. href는 <a>가 아닌 요소(SVG <image>, <use> 등)에서만 본다 */
