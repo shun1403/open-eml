@@ -6,7 +6,7 @@
 
 메일 프로그램 없이, 설치 없이, 파일을 끌어다 놓기만 하면 됩니다. 메일은 서버로 올라가지 않고 내 브라우저 안에서만 열립니다.
 
-### 👉 [바로 써 보기: shun1403.github.io/open-eml](https://shun1403.github.io/open-eml/)
+### > [바로 써 보기: shun1403.github.io/open-eml](https://shun1403.github.io/open-eml/)
 
 ![open-eml로 견적 메일을 연 화면. 왼쪽에 메일 목록, 오른쪽에 보낸 사람·첨부파일 트리·링크 첨부·본문이 보인다](docs/images/mail.png)
 
