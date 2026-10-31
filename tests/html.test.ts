@@ -63,4 +63,34 @@ describe('prepareHtml', () => {
     const allowed = prepareHtml(html, { cidUrls: noCids, allowRemote: true });
     expect(allowed.document).toContain('https://a.example/f.woff');
   });
+
+  it('속성 값 속 "<head>"로 CSP 위치를 바꾸지 못한다', () => {
+    const { document } = prepareHtml('<html title="<head>"><body><p>x</p></body></html>', { cidUrls: noCids, allowRemote: false });
+    const doc = new DOMParser().parseFromString(document, 'text/html');
+    const csp = doc.head.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    expect(csp?.parentElement).toBe(doc.head);
+    expect(doc.head.firstElementChild?.nextElementSibling).toBe(csp);
+  });
+
+  it('SVG <image href>, 역슬래시 주소, image-set 문자열 주소도 막는다', () => {
+    const html =
+      '<svg><image href="https://t.example/1.png"/><use xlink:href="//t.example/2.svg#a"/></svg>' +
+      '<img src="\\\\t.example/3.png"><img srcset="a.png 1x, https://t.example/4.png 2x">' +
+      '<div style="background-image:image-set(\'https://t.example/5.png\' 1x)">x</div>' +
+      '<a href="https://example.com/keep">link</a>';
+    const { document, blockedCount } = prepareHtml(html, { cidUrls: noCids, allowRemote: false });
+    expect(document).not.toContain('t.example');
+    expect(document).toContain('href="https://example.com/keep"');
+    // 일부는 DOMPurify가 먼저 지워 개수에 잡히지 않는다
+    expect(blockedCount).toBeGreaterThanOrEqual(4);
+  });
+
+  it('url( 가 끝없이 반복돼도 금방 끝난다', () => {
+    const start = performance.now();
+    prepareHtml(`<p style="background:${'url('.repeat(20000)}">x</p><style>${'url('.repeat(20000)}</style>`, {
+      cidUrls: noCids,
+      allowRemote: false,
+    });
+    expect(performance.now() - start).toBeLessThan(1500);
+  });
 });

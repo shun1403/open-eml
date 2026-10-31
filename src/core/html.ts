@@ -13,10 +13,15 @@ export interface PrepareHtmlOptions {
   allowRemote: boolean;
 }
 
-const REMOTE_URL = /^(?:https?:)?\/\//i;
-const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
-const CSS_IMPORT = /@import\s+[^;]+;?/gi;
-const URL_ATTRIBUTES = ['src', 'background', 'poster'];
+/** http(s):, ftp:, //host, \\host (브라우저는 역슬래시도 슬래시로 읽는다) */
+const REMOTE_URL = /^\s*(?:(?:https?|ftp):|[\\/]{2})/i;
+const REMOTE_ANYWHERE = /(?:https?|ftp):|[\\/]{2}/i;
+// 길이를 제한해 "url(url(url(..." 같은 입력에서 정규식이 오래 걸리지 않게 한다
+const CSS_URL = /url\(\s*(['"]?)([^)'"]{0,4096})\1\s*\)/gi;
+const CSS_REMOTE_STRING = /(['"])\s*(?:(?:https?|ftp):|[\\/]{2})[^'"]{0,4096}\1/gi;
+const CSS_IMPORT = /@import\s+[^;]{0,4096};?/gi;
+/** 리소스를 불러오는 속성. href는 <a>가 아닌 요소(SVG <image>, <use> 등)에서만 본다 */
+const URL_ATTRIBUTES = ['src', 'background', 'poster', 'href', 'xlink:href'];
 
 function contentSecurityPolicy(allowRemote: boolean): string {
   const remote = allowRemote ? ' https: http:' : '';
@@ -60,17 +65,25 @@ export function prepareHtml(html: string, { cidUrls, allowRemote }: PrepareHtmlO
           blockedCount++;
           return '';
         });
-    return withoutImports.replace(CSS_URL, (whole, quote: string, url: string) => {
+    const withoutUrls = withoutImports.replace(CSS_URL, (whole, quote: string, url: string) => {
       const resolved = resolveCid(url);
       if (resolved !== url) return `url(${quote}${resolved}${quote})`;
-      if (allowRemote || !REMOTE_URL.test(url.trim())) return whole;
+      if (allowRemote || !REMOTE_URL.test(url)) return whole;
       blockedCount++;
       return 'none';
+    });
+    if (allowRemote) return withoutUrls;
+    // image-set("https://...")처럼 url() 없이 따옴표로 쓴 주소
+    return withoutUrls.replace(CSS_REMOTE_STRING, () => {
+      blockedCount++;
+      return '""';
     });
   };
 
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    const isLink = node.tagName.toLowerCase() === 'a';
     for (const name of URL_ATTRIBUTES) {
+      if (isLink && name.endsWith('href')) continue;
       const value = node.getAttribute(name);
       if (!value) continue;
       const resolved = resolveCid(value);
@@ -83,7 +96,7 @@ export function prepareHtml(html: string, { cidUrls, allowRemote }: PrepareHtmlO
       }
     }
     const srcset = node.getAttribute('srcset');
-    if (srcset && !allowRemote && REMOTE_URL.test(srcset.trim())) {
+    if (srcset && !allowRemote && REMOTE_ANYWHERE.test(srcset)) {
       node.removeAttribute('srcset');
       blockedCount++;
     }
@@ -113,14 +126,12 @@ export function prepareHtml(html: string, { cidUrls, allowRemote }: PrepareHtmlO
     DOMPurify.removeAllHooks();
   }
 
+  // CSP를 문서 맨 앞에 둔다. 브라우저는 이 meta를 <head>의 첫 요소로 넣으므로,
+  // 메일 속 어떤 태그나 속성 값(예: title="<head>")으로도 CSP 앞에 끼어들 수 없다
   const head =
     `<meta charset="utf-8">` +
     `<meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy(allowRemote)}">` +
     `<style>${BASE_STYLE}</style>`;
-  const document = /<head[^>]*>/i.test(body)
-    ? body.replace(/<head[^>]*>/i, (tag) => tag + head)
-    : `<html><head>${head}</head>${body}</html>`;
-
-  return { document: `<!doctype html>${document}`, blockedCount };
+  return { document: `<!doctype html>${head}${body}`, blockedCount };
 }
 

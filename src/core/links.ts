@@ -29,7 +29,9 @@ const SERVICES: ServiceRule[] = [
   { service: '대용량 첨부', match: (u) => BIG_FILE_HINT.test(u.hostname + u.pathname) },
 ];
 
-const FILE_NAME = /[^\\/:*?"<>|\s][^\\/:*?"<>|]*\.[a-z0-9]{2,5}$/i;
+// 맨 앞부터 맞춰 보도록 ^를 붙이고, 아주 긴 글자는 파일 이름으로 보지 않는다 (정규식 지연 방지)
+const FILE_NAME_PATTERN = /^[^\\/:*?"<>|\s][^\\/:*?"<>|]{0,250}\.[a-z0-9]{2,5}$/i;
+const isFileName = (text: string) => text.length <= 260 && FILE_NAME_PATTERN.test(text);
 const SIZE = /\d+(?:[.,]\d+)?\s?(?:KB|MB|GB|TB)\b/i;
 const EXPIRES =
   /(\d{4}\s?[.\-/년]\s?\d{1,2}\s?[.\-/월]\s?\d{1,2}일?\.?(?:\s?\(?[월화수목금토일]\)?)?(?:\s?\d{1,2}:\d{2})?)\s*(?:까지|만료)/;
@@ -49,7 +51,7 @@ function fileNameFromUrl(url: URL): string | undefined {
     if (!value) continue;
     try {
       const decoded = decodeURIComponent(value);
-      if (FILE_NAME.test(decoded)) return decoded;
+      if (isFileName(decoded)) return decoded;
     } catch {
       // 잘못 인코딩된 주소는 건너뛴다
     }
@@ -61,7 +63,7 @@ function classify(url: URL, text: string): string | null {
   const rule = SERVICES.find((candidate) => candidate.match(url));
   if (rule) return rule.service;
   // 서비스는 모르지만 링크 글자가 파일 이름처럼 생겼으면 파일 링크로 본다
-  return FILE_NAME.test(text.trim()) ? '링크로 첨부된 파일' : null;
+  return isFileName(text.trim()) ? '링크로 첨부된 파일' : null;
 }
 
 /** 본문에서 대용량 첨부·클라우드 공유 링크를 찾는다 */
@@ -72,7 +74,7 @@ export function findCloudLinks(html: string | undefined, text: string | undefine
     if (!service || links.has(url.href)) return;
     links.set(url.href, {
       url: url.href,
-      label: (FILE_NAME.test(label.trim()) ? label.trim() : fileNameFromUrl(url)) ?? (label.trim() || url.hostname),
+      label: (isFileName(label.trim()) ? label.trim() : fileNameFromUrl(url)) ?? (label.trim() || url.hostname),
       service,
       size: SIZE.exec(context)?.[0],
       expires: EXPIRES.exec(context)?.[1],

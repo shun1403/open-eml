@@ -75,17 +75,24 @@ export function extensionFromMime(mimeType: string): string | undefined {
   return EXTENSION_BY_MIME[mimeType.toLowerCase()];
 }
 
+/** "Image/SVG+XML; charset=x"처럼 매개변수나 대소문자가 섞인 형식을 "image/svg+xml"로 맞춘다 */
+export function mimeEssence(type: string | undefined): string {
+  const essence = (type ?? '').split(';')[0].trim().toLowerCase();
+  return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(essence) ? essence : '';
+}
+
 /** 첨부 헤더의 형식이 너무 일반적이면 파일 이름에서 형식을 추정한다 */
 export function resolveMimeType(filename: string, declared?: string): string {
-  const normalized = declared?.toLowerCase().trim();
+  const normalized = mimeEssence(declared);
   if (normalized && normalized !== 'application/octet-stream' && normalized !== 'application/unknown') {
     return normalized;
   }
-  return mimeFromFilename(filename) ?? normalized ?? 'application/octet-stream';
+  return mimeFromFilename(filename) ?? (normalized || 'application/octet-stream');
 }
 
+/** 원래 이름과, 실제로 저장될 이름 둘 중 하나라도 위험한 확장자면 경고한다 */
 export function isRiskyFile(filename: string): boolean {
-  return RISKY_EXTENSIONS.has(extensionOf(filename));
+  return RISKY_EXTENSIONS.has(extensionOf(filename)) || RISKY_EXTENSIONS.has(extensionOf(safeFilename(filename)));
 }
 
 export function isMailFile(filename: string, mimeType: string): boolean {
@@ -135,13 +142,19 @@ export function stripInvisible(name: string): string {
   return name.replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, '');
 }
 
+const MAX_FILENAME = 200;
+
 /** 다운로드나 ZIP 항목 이름으로 쓸 수 없는 문자를 바꾼다 */
 export function safeFilename(name: string, fallback = 'file'): string {
   const cleaned = baseName(stripInvisible(name))
     .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]/g, '_')
-    .replace(/^[.\s]+|[.\s]+$/g, '')
-    .slice(0, 200);
-  return cleaned || fallback;
+    .replace(/^[.\s]+|[.\s]+$/g, '');
+  if (!cleaned) return fallback;
+  if (cleaned.length <= MAX_FILENAME) return cleaned;
+  // 긴 이름은 앞부분을 줄이고 확장자는 남긴다 (잘라 낸 결과가 다른 확장자가 되지 않게)
+  const ext = extensionOf(cleaned);
+  const tail = ext && ext.length < 20 ? `.${ext}` : '';
+  return cleaned.slice(0, MAX_FILENAME - tail.length) + tail;
 }
 
 export function formatBytes(bytes: number): string {

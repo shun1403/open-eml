@@ -1,5 +1,5 @@
 import { zipSync, type Zippable } from 'fflate';
-import { extensionOf, safeFilename } from './files';
+import { extensionOf, isRiskyFile, safeFilename } from './files';
 import type { AttachmentNode } from './types';
 
 /** 이미 압축된 형식은 다시 압축해도 작아지지 않으니 그대로 담는다 */
@@ -56,6 +56,14 @@ function addNodes(target: Zippable, nodes: AttachmentNode[]): void {
       }
     }
   }
+}
+
+/** ZIP에 함께 담기는 파일 중 실행 파일·매크로 문서 이름 (buildZip과 같은 범위) */
+export function riskyFilesIn(nodes: AttachmentNode[]): string[] {
+  return nodes.flatMap((node) => [
+    ...(isRiskyFile(node.filename) ? [node.filename] : []),
+    ...(node.children?.kind === 'mail' ? riskyFilesIn(node.children.mail.attachments.filter((child) => !child.inline)) : []),
+  ]);
 }
 
 /** 첨부 목록을 하나의 ZIP으로 묶는다. 압축 파일은 풀지 않고 원본 그대로 담는다 */

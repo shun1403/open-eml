@@ -46,3 +46,11 @@ describe('findCloudLinks', () => {
     expect(fromText[0]).toMatchObject({ label: '보고서.pdf', size: '30MB' });
   });
 });
+
+describe('정규식 지연', () => {
+  it('아주 긴 링크 글자나 주소도 금방 처리한다', () => {
+    const start = performance.now();
+    findCloudLinks(`<a href="https://a.example/bigfile/${'a'.repeat(400000)}">${'a'.repeat(400000)}</a>`, `https://a.example/bigfile/${'a'.repeat(400000)}`);
+    expect(performance.now() - start).toBeLessThan(1500);
+  });
+});

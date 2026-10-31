@@ -3,6 +3,9 @@ import mammoth from 'mammoth';
 import { prepareHtml } from '../core/html';
 import type { AttachmentNode } from '../core/types';
 import { HtmlFrame } from '../components/HtmlFrame';
+import { zipUncompressedSize } from '../core/zip';
+
+const MAX_UNZIPPED = 100 * 1024 * 1024;
 
 export default function DocxPreview({ node }: { node: AttachmentNode }) {
   const [html, setHtml] = useState<string | null>(null);
@@ -11,8 +14,12 @@ export default function DocxPreview({ node }: { node: AttachmentNode }) {
   useEffect(() => {
     let cancelled = false;
     const arrayBuffer = node.content.slice().buffer;
-    mammoth
-      .convertToHtml({ arrayBuffer })
+    zipUncompressedSize(node.content)
+      .then((size) => {
+        // 압축을 풀면 지나치게 커지는 문서(압축 폭탄)는 미리보지 않는다
+        if (size > MAX_UNZIPPED) throw new Error('too large');
+        return mammoth.convertToHtml({ arrayBuffer });
+      })
       .then((result) => {
         if (cancelled) return;
         // 문서 속 그림은 data: URL로 들어오고, 외부 링크 그림은 막힌다

@@ -9,7 +9,27 @@ let worker: Worker | null = null;
 let nextId = 0;
 const pending = new Map<number, Pending>();
 
+/** Worker가 이 시간 동안 아무 응답도 없으면 조작된 파일에 걸린 것으로 보고 다시 시작한다 */
+const WATCHDOG_MS = 90_000;
+let watchdog: ReturnType<typeof setTimeout> | undefined;
+
 export class WrongPasswordError extends Error {}
+
+function failAll(message: string) {
+  const error: WorkerResponse = { id: -1, type: 'error', error: message };
+  for (const handler of pending.values()) handler(error);
+  pending.clear();
+  clearTimeout(watchdog);
+  worker?.terminate();
+  worker = null;
+}
+
+function resetWatchdog() {
+  clearTimeout(watchdog);
+  if (pending.size > 0) {
+    watchdog = setTimeout(() => failAll('파일을 읽는 데 너무 오래 걸려 중단했습니다. 손상되었거나 조작된 파일일 수 있습니다.'), WATCHDOG_MS);
+  }
+}
 
 function getWorker(): Worker {
   if (worker) return worker;
@@ -18,14 +38,9 @@ function getWorker(): Worker {
     const handler = pending.get(event.data.id);
     // 처리기가 true를 돌려주면 그 요청은 끝난 것이다 (mbox는 여러 번 나눠 온다)
     if (handler?.(event.data)) pending.delete(event.data.id);
+    resetWatchdog();
   };
-  worker.onerror = (event) => {
-    const error: WorkerResponse = { id: -1, type: 'error', error: event.message || '메일을 읽지 못했습니다.' };
-    for (const handler of pending.values()) handler(error);
-    pending.clear();
-    worker?.terminate();
-    worker = null;
-  };
+  worker.onerror = (event) => failAll(event.message || '메일을 읽지 못했습니다.');
   return worker;
 }
 
@@ -35,6 +50,7 @@ function request(body: RequestBody, handler: Pending): void {
   const id = nextId++;
   pending.set(id, handler);
   getWorker().postMessage({ ...body, id } as WorkerRequest);
+  resetWatchdog();
 }
 
 function toError(response: Extract<WorkerResponse, { type: 'error' }>): Error {

@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as XLSX from '@e965/xlsx';
 import { decodeText } from '../core/encoding';
 import { extensionOf } from '../core/files';
 import type { AttachmentNode } from '../core/types';
+import { zipUncompressedSize } from '../core/zip';
 
 const MAX_ROWS = 1000;
 const MAX_COLUMNS = 60;
@@ -38,17 +39,35 @@ function readSheets(node: AttachmentNode): Sheet[] {
   });
 }
 
+/** 압축을 풀면 이보다 커지는 파일은 미리보지 않는다 (압축 폭탄으로 탭이 멈추는 것 방지) */
+const MAX_UNZIPPED = 100 * 1024 * 1024;
+
+type Result = { sheets: Sheet[]; error?: string };
+
+async function load(node: AttachmentNode): Promise<Result> {
+  const isZip = node.content[0] === 0x50 && node.content[1] === 0x4b;
+  if (isZip && (await zipUncompressedSize(node.content)) > MAX_UNZIPPED) {
+    return { sheets: [], error: '파일이 너무 커서 미리보기를 만들지 않았습니다. 내려받아 확인하세요.' };
+  }
+  return { sheets: readSheets(node) };
+}
+
 export default function SheetPreview({ node }: { node: AttachmentNode }) {
-  const result = useMemo(() => {
-    try {
-      return { sheets: readSheets(node) };
-    } catch {
-      return { sheets: [] as Sheet[], error: true };
-    }
-  }, [node]);
+  const [result, setResult] = useState<Result | null>(null);
   const [active, setActive] = useState(0);
 
-  if (result.error) return <p className="muted preview-message">표를 열지 못했습니다. 내려받아 확인하세요.</p>;
+  useEffect(() => {
+    let cancelled = false;
+    load(node)
+      .catch((): Result => ({ sheets: [], error: '표를 열지 못했습니다. 내려받아 확인하세요.' }))
+      .then((value) => !cancelled && setResult(value));
+    return () => {
+      cancelled = true;
+    };
+  }, [node]);
+
+  if (!result) return <p className="muted preview-message">표를 여는 중…</p>;
+  if (result.error) return <p className="muted preview-message">{result.error}</p>;
   const sheet = result.sheets[active];
   if (!sheet) return <p className="muted preview-message">내용이 없습니다.</p>;
   const columns = Math.max(0, ...sheet.rows.map((row) => row.length));

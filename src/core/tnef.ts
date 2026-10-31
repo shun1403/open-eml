@@ -103,6 +103,8 @@ function readMapiProps(data: Uint8Array): Map<number, PropValue> {
     const variable = baseType === PT_STRING8 || baseType === PT_UNICODE || baseType === PT_BINARY || baseType === PT_OBJECT;
     if (variable) {
       const values = reader.u32();
+      // 값 하나에 최소 4바이트가 필요하다. 남은 데이터보다 많다고 적혀 있으면 조작된 파일이다
+      if (values * 4 > reader.remaining) break;
       for (let v = 0; v < values; v++) {
         const length = reader.u32();
         const value = reader.take(length);
@@ -113,6 +115,8 @@ function readMapiProps(data: Uint8Array): Map<number, PropValue> {
       const size = FIXED_SIZES[baseType];
       if (size === undefined) break; // 모르는 형식이면 더 읽을 수 없다
       const values = type & MV_FLAG ? reader.u32() : 1;
+      if (values * size > reader.remaining) break;
+      if (size === 0) continue; // 크기 0인 값을 셀 필요는 없다 (개수를 40억으로 적어 멈추게 하는 공격)
       for (let v = 0; v < values; v++) {
         const value = reader.take(size);
         if (v === 0) props.set(id, { type: baseType, data: value });

@@ -56,3 +56,28 @@ describe('winmail.dat 첨부', () => {
     });
   });
 });
+
+describe('조작된 winmail.dat', () => {
+  it('값 개수를 40억으로 적은 속성에서도 멈추지 않는다', () => {
+    // attMAPIProps: 속성 1개, 형식 0x1001(여러 값 PT_NULL), 개수 0xFFFFFFFF
+    const props = new Uint8Array(12);
+    const view = new DataView(props.buffer);
+    view.setUint32(0, 1, true);
+    view.setUint16(4, 0x1001, true);
+    view.setUint16(6, 0x0e00, true);
+    view.setUint32(8, 0xffffffff, true);
+    const attr = new Uint8Array(1 + 4 + 4 + props.length + 2);
+    const a = new DataView(attr.buffer);
+    a.setUint8(0, 1);
+    a.setUint32(1, 0x00069003, true);
+    a.setUint32(5, props.length, true);
+    attr.set(props, 9);
+    const tnef = new Uint8Array(6 + attr.length);
+    new DataView(tnef.buffer).setUint32(0, 0x223e9f78, true);
+    tnef.set(attr, 6);
+
+    const start = performance.now();
+    expect(parseTnef(tnef).attachments).toEqual([]);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+});

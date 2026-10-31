@@ -26,6 +26,15 @@ describe('files', () => {
     expect(resolveMimeType('noext', undefined)).toBe('application/octet-stream');
   });
 
+  it('길게 잘리면 위험한 확장자가 되는 이름도 알아보고, 자를 때 확장자를 지킨다', () => {
+    const name = `${'a'.repeat(197)}.js.txt`;
+    expect(isRiskyFile(name)).toBe(false);
+    expect(safeFilename(name).endsWith('.txt')).toBe(true);
+    expect(safeFilename(name).length).toBe(200);
+    expect(isRiskyFile(`${'a'.repeat(250)}.exe`)).toBe(true);
+    expect(safeFilename(`${'a'.repeat(250)}.exe`).endsWith('.exe')).toBe(true);
+  });
+
   it('위험한 확장자를 알아본다', () => {
     expect(isRiskyFile('invoice.pdf.exe')).toBe(true);
     expect(isRiskyFile('매크로.xlsm')).toBe(true);

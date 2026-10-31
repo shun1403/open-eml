@@ -63,3 +63,14 @@ export async function readZip(content: Uint8Array, budget: ZipBudget, password?:
     await reader.close();
   }
 }
+
+/** 미리보기 라이브러리에 넘기기 전에, 압축을 풀면 몇 바이트가 되는지 ZIP 목차로 확인한다 */
+export async function zipUncompressedSize(content: Uint8Array): Promise<number> {
+  const reader = new ZipReader(new Uint8ArrayReader(content));
+  try {
+    const entries = await reader.getEntries();
+    return entries.reduce((sum, entry) => sum + (entry.uncompressedSize ?? 0), 0);
+  } finally {
+    await reader.close();
+  }
+}

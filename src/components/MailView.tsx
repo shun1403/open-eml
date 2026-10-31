@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { downloadZip } from '../core/download';
+import { downloadZip, riskyFilesIn } from '../core/download';
 import { formatAddress, formatDate } from '../core/format';
 import { prepareHtml } from '../core/html';
 import { findCloudLinks, type CloudLink } from '../core/links';
@@ -121,7 +121,15 @@ export function MailView({ mail, fallbackTitle, ...actions }: MailViewProps) {
               <button
                 type="button"
                 className="button"
-                onClick={() => downloadZip(listed, mail.subject || fallbackTitle)}
+                onClick={() => {
+                  const risky = riskyFilesIn(listed);
+                  const ok =
+                    risky.length === 0 ||
+                    window.confirm(
+                      `실행 파일이거나 매크로가 들어 있을 수 있는 파일 ${risky.length}개가 함께 담깁니다.\n${risky.slice(0, 5).join('\n')}\n\n보낸 사람을 신뢰할 수 있을 때만 여세요. 내려받을까요?`,
+                    );
+                  if (ok) downloadZip(listed, mail.subject || fallbackTitle);
+                }}
               >
                 <Icon name="download" /> 전체 ZIP으로 받기
               </button>
