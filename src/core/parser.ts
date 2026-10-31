@@ -1,5 +1,5 @@
 import PostalMime, { type Address } from 'postal-mime';
-import { containerKind, extensionFromMime, resolveMimeType, safeFilename } from './files';
+import { containerKind, extensionFromMime, resolveMimeType, safeFilename, stripInvisible } from './files';
 import { parseMsg, type MsgContent } from './msg';
 import { parseTnef } from './tnef';
 import type { AttachmentNode, MailAddress, ParsedMail, RawAttachment } from './types';
@@ -110,7 +110,7 @@ async function buildNodes(raws: RawAttachment[], idPrefix: string, depth: number
 }
 
 function toNode(raw: RawAttachment, id: string, index: number): AttachmentNode {
-  const filename = raw.filename?.trim() || fallbackFilename(raw.mimeType, index);
+  const filename = stripInvisible(raw.filename ?? '').trim() || fallbackFilename(raw.mimeType, index);
   return {
     id,
     filename,

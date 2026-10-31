@@ -15,6 +15,7 @@ export interface PrepareHtmlOptions {
 
 const REMOTE_URL = /^(?:https?:)?\/\//i;
 const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
+const CSS_IMPORT = /@import\s+[^;]+;?/gi;
 const URL_ATTRIBUTES = ['src', 'background', 'poster'];
 
 function contentSecurityPolicy(allowRemote: boolean): string {
@@ -51,13 +52,22 @@ export function prepareHtml(html: string, { cidUrls, allowRemote }: PrepareHtmlO
     return cidUrls.get(id) ?? value;
   };
 
-  const rewriteCss = (css: string): string =>
-    css.replace(CSS_URL, (whole, quote: string, url: string) => {
+  const rewriteCss = (css: string): string => {
+    // CSP가 막지만, 외부 스타일·배경 그림·글꼴 요청을 시도하지도 않도록 주소를 지운다
+    const withoutImports = allowRemote
+      ? css
+      : css.replace(CSS_IMPORT, () => {
+          blockedCount++;
+          return '';
+        });
+    return withoutImports.replace(CSS_URL, (whole, quote: string, url: string) => {
       const resolved = resolveCid(url);
       if (resolved !== url) return `url(${quote}${resolved}${quote})`;
-      if (REMOTE_URL.test(url)) blockedCount += allowRemote ? 0 : 1;
-      return whole;
+      if (allowRemote || !REMOTE_URL.test(url.trim())) return whole;
+      blockedCount++;
+      return 'none';
     });
+  };
 
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     for (const name of URL_ATTRIBUTES) {

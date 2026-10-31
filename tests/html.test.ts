@@ -52,4 +52,15 @@ describe('prepareHtml', () => {
     expect(document).toContain('target="_blank"');
     expect(document).toContain('rel="noopener noreferrer"');
   });
+
+  it('CSS 속 외부 주소와 @import도 지운다', () => {
+    const html = '<style>@import url("https://a.example/x.css"); @import "//a.example/y.css"; @font-face{src:url(https://a.example/f.woff)} p{color:red}</style><p style="background:url(//a.example/b.png) no-repeat">x</p>';
+    const blocked = prepareHtml(html, { cidUrls: noCids, allowRemote: false });
+    expect(blocked.document).not.toContain('a.example');
+    expect(blocked.document).toContain('p{color:red}');
+    expect(blocked.blockedCount).toBe(4);
+
+    const allowed = prepareHtml(html, { cidUrls: noCids, allowRemote: true });
+    expect(allowed.document).toContain('https://a.example/f.woff');
+  });
 });

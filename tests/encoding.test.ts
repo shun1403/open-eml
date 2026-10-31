@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import iconv from 'iconv-lite';
 import { decodeText, recoverLatin1Name } from '../src/core/encoding';
-import { formatBytes, isRiskyFile, resolveMimeType, safeFilename } from '../src/core/files';
+import { formatBytes, isRiskyFile, resolveMimeType, safeFilename, stripInvisible } from '../src/core/files';
 
 describe('decodeText', () => {
   it('UTF-8, BOM, EUC-KR을 구분해 읽는다', () => {
@@ -30,6 +30,11 @@ describe('files', () => {
     expect(isRiskyFile('invoice.pdf.exe')).toBe(true);
     expect(isRiskyFile('매크로.xlsm')).toBe(true);
     expect(isRiskyFile('photo.jpg')).toBe(false);
+  });
+
+  it('방향을 뒤집는 숨은 문자로 확장자를 위장하지 못하게 한다', () => {
+    expect(stripInvisible('invoice.pdf\u202Eexe.scr')).toBe('invoice.pdfexe.scr');
+    expect(safeFilename('a\u200Bb\u2066.txt')).toBe('ab.txt');
   });
 
   it('파일 이름에 쓸 수 없는 문자를 바꾼다', () => {

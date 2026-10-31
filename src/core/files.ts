@@ -127,9 +127,17 @@ export function isZipFile(filename: string, mimeType: string): boolean {
   );
 }
 
+/**
+ * 글자 방향을 뒤집거나 보이지 않는 문자를 지운다.
+ * "invoice.pdf\u202Eexe.scr"가 화면에 "invoice.pdfrcs.exe"처럼 보이는 위장을 막는다.
+ */
+export function stripInvisible(name: string): string {
+  return name.replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, '');
+}
+
 /** 다운로드나 ZIP 항목 이름으로 쓸 수 없는 문자를 바꾼다 */
 export function safeFilename(name: string, fallback = 'file'): string {
-  const cleaned = baseName(name)
+  const cleaned = baseName(stripInvisible(name))
     .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]/g, '_')
     .replace(/^[.\s]+|[.\s]+$/g, '')
     .slice(0, 200);
